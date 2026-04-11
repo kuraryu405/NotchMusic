@@ -1,0 +1,45 @@
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+
+disabled_rules:
+  - trailing_whitespace       # handled by editor
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - contains_over_filter_count
+  - empty_count
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - identical_operands
+  - joined_default_parameter
+  - legacy_random
+  - modifier_order
+  - overridden_super_call
+  - prefer_self_type_over_type_of_self
+  - redundant_nil_coalescing
+  - sorted_imports
+  - toggle_bool
+  - unowned_variable_capture
+  - vertical_parameter_alignment_on_call
+
+line_length:
+  warning: 120
+  error: 160
+
+function_body_length:
+  warning: 50
+  error: 80
+
+type_body_length:
+  warning: 200
+  error: 300
+
+file_length:
+  warning: 400
+  error: 600
