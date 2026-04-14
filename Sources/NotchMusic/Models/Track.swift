@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-struct Track: Equatable, Sendable {
+struct Track: Equatable {
     let title: String
     let artist: String
     let album: String
