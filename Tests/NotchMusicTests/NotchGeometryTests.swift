@@ -1,5 +1,5 @@
-import XCTest
 @testable import NotchMusic
+import XCTest
 
 final class NotchGeometryTests: XCTestCase {
 

@@ -10,15 +10,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Run as an accessory app (no Dock icon, no main window).
         NSApp.setActivationPolicy(.accessory)
 
-        let service   = AppleMusicService()
-        let vm        = MusicPlayerViewModel(service: service)
-        viewModel     = vm
+        let service = AppleMusicService()
+        let playerViewModel = MusicPlayerViewModel(service: service)
+        viewModel = playerViewModel
 
-        let manager   = NotchWindowManager(viewModel: vm)
+        let manager = NotchWindowManager(viewModel: playerViewModel)
         windowManager = manager
         manager.show()
 
-        vm.startObserving()
+        playerViewModel.startObserving()
 
         setupStatusBarMenu()
     }

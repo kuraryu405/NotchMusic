@@ -1,6 +1,6 @@
 import AppKit
-import SwiftUI
 import Combine
+import SwiftUI
 
 /// Manages two overlay windows:
 ///

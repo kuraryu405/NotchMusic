@@ -11,12 +11,12 @@ struct DualPillView: View {
     /// True while card is visible — flattens bottom outer corners to connect flush.
     let bottomCornersFlat: Bool
 
-    private var notchW: CGFloat   { geometry.notchFrame.width }
-    private var sideW: CGFloat    { (NotchGeometry.expandedWidth - notchW) / 2 }
-    private var h: CGFloat        { geometry.notchFrame.height }
-    private var outerR: CGFloat   { h / 2 }
-    private var artSize: CGFloat  { h - 10 }
-    private var bottomR: CGFloat  { bottomCornersFlat ? 0 : outerR }
+    private var notchW: CGFloat { geometry.notchFrame.width }
+    private var sideW: CGFloat { (NotchGeometry.expandedWidth - notchW) / 2 }
+    private var h: CGFloat { geometry.notchFrame.height }
+    private var outerR: CGFloat { h / 2 }
+    private var artSize: CGFloat { h - 10 }
+    private var bottomR: CGFloat { bottomCornersFlat ? 0 : outerR }
 
     var body: some View {
         HStack(spacing: 0) {
