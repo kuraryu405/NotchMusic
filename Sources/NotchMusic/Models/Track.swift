@@ -17,6 +17,7 @@ struct Track: Equatable {
 }
 
 extension Track {
+    @MainActor
     static let placeholder = Track(
         title: "Not Playing",
         artist: "—",
