@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 /// Reads now-playing state from Apple Music via AppleScript and
 /// distributed notifications.  This avoids reliance on MediaRemote,
@@ -28,8 +28,8 @@ final class AppleMusicService: MusicServiceProtocol {
     }
 
     func togglePlayPause() { runAppleScript("tell application \"Music\" to playpause") }
-    func nextTrack()       { runAppleScript("tell application \"Music\" to next track") }
-    func previousTrack()   { runAppleScript("tell application \"Music\" to previous track") }
+    func nextTrack() { runAppleScript("tell application \"Music\" to next track") }
+    func previousTrack() { runAppleScript("tell application \"Music\" to previous track") }
 
     // MARK: - Distributed notifications
 

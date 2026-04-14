@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 struct Track: Equatable, Sendable {
     let title: String

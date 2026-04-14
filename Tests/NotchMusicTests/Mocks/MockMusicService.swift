@@ -13,11 +13,11 @@ final class MockMusicService: MusicServiceProtocol {
     private(set) var nextTrackCount       = 0
     private(set) var previousTrackCount   = 0
 
-    func startObserving()  { didStartObserving = true }
-    func stopObserving()   { didStopObserving  = true }
+    func startObserving() { didStartObserving = true }
+    func stopObserving() { didStopObserving  = true }
     func togglePlayPause() { togglePlayPauseCount += 1 }
-    func nextTrack()       { nextTrackCount += 1 }
-    func previousTrack()   { previousTrackCount += 1 }
+    func nextTrack() { nextTrackCount += 1 }
+    func previousTrack() { previousTrackCount += 1 }
 
     // Test helpers — simulate events from the service.
     func simulateTrack(_ track: Track?) { onTrackChanged?(track) }

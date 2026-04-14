@@ -5,10 +5,10 @@ func debugLog(_ msg: String) {
     #if DEBUG
     let line = msg + "\n"
     if let data = line.data(using: .utf8) {
-        if let fh = FileHandle(forWritingAtPath: "/tmp/notchmusic.log") {
-            fh.seekToEndOfFile()
-            fh.write(data)
-            fh.closeFile()
+        if let fileHandle = FileHandle(forWritingAtPath: "/tmp/notchmusic.log") {
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(data)
+            fileHandle.closeFile()
         } else {
             FileManager.default.createFile(atPath: "/tmp/notchmusic.log", contents: data)
         }

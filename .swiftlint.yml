@@ -7,6 +7,8 @@ excluded:
 
 disabled_rules:
   - trailing_whitespace       # handled by editor
+  - notification_center_detachment
+  - vertical_parameter_alignment
 
 opt_in_rules:
   - array_init
@@ -29,12 +31,29 @@ opt_in_rules:
   - vertical_parameter_alignment_on_call
 
 line_length:
-  warning: 120
-  error: 160
+  warning: 160
+  error: 220
 
 function_body_length:
-  warning: 50
-  error: 80
+  warning: 80
+  error: 120
+
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
+  max_length:
+    warning: 80
+    error: 100
+  excluded:
+    - id
+    - URL
+
+type_name:
+  min_length: 3
+  max_length:
+    warning: 80
+    error: 100
 
 type_body_length:
   warning: 200

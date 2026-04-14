@@ -1,6 +1,6 @@
-import Foundation
-import Combine
 import AppKit
+import Combine
+import Foundation
 
 /// Observable state for the notch UI.
 ///

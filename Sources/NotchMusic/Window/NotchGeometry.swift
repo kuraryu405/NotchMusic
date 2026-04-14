@@ -19,49 +19,46 @@ struct NotchGeometry {
     init() {
         if #available(macOS 12.0, *) {
             // Priority 1: screen that exposes auxiliary areas (the actual notch).
-            for s in NSScreen.screens {
-                if let topLeft  = s.auxiliaryTopLeftArea,
-                   let topRight = s.auxiliaryTopRightArea,
-                   topRight.minX > topLeft.maxX          // there IS a gap
-                {
+            for candidateScreen in NSScreen.screens {
+                if let topLeft  = candidateScreen.auxiliaryTopLeftArea,
+                   let topRight = candidateScreen.auxiliaryTopRightArea,
+                   topRight.minX > topLeft.maxX { // there IS a gap
                     let notchX      = topLeft.maxX
                     let notchWidth  = topRight.minX - topLeft.maxX
-                    let notchHeight = s.safeAreaInsets.top
-                    let notchY      = s.frame.maxY - notchHeight
+                    let notchHeight = candidateScreen.safeAreaInsets.top
+                    let notchY      = candidateScreen.frame.maxY - notchHeight
 
                     notchFrame = CGRect(x: notchX, y: notchY, width: notchWidth, height: notchHeight)
                     hasNotch   = true
-                    screen     = s
-                    debugLog("[NotchGeometry] found notch via auxiliaryAreas on: \(s.localizedName)")
+                    screen     = candidateScreen
+                    debugLog("[NotchGeometry] found notch via auxiliaryAreas on: \(candidateScreen.localizedName)")
                     debugLog("[NotchGeometry] notchFrame: \(notchFrame)")
                     return
                 }
             }
 
             // Priority 2: screen with non-zero top safe area — centre a pill.
-            for s in NSScreen.screens {
-                if s.safeAreaInsets.top > 0 {
-                    let h      = s.safeAreaInsets.top
-                    let cx     = s.frame.midX
-                    let y      = s.frame.maxY - h
-                    notchFrame = CGRect(x: cx - 125, y: y, width: 250, height: h)
-                    hasNotch   = true
-                    screen     = s
-                    debugLog("[NotchGeometry] found notch via safeAreaInsets on: \(s.localizedName)")
-                    debugLog("[NotchGeometry] notchFrame: \(notchFrame)")
-                    return
-                }
+            for candidateScreen in NSScreen.screens where candidateScreen.safeAreaInsets.top > 0 {
+                let safeAreaTop = candidateScreen.safeAreaInsets.top
+                let centerX = candidateScreen.frame.midX
+                let topY = candidateScreen.frame.maxY - safeAreaTop
+                notchFrame = CGRect(x: centerX - 125, y: topY, width: 250, height: safeAreaTop)
+                hasNotch   = true
+                screen     = candidateScreen
+                debugLog("[NotchGeometry] found notch via safeAreaInsets on: \(candidateScreen.localizedName)")
+                debugLog("[NotchGeometry] notchFrame: \(notchFrame)")
+                return
             }
         }
 
         // Priority 3: no notch detected — centre pill on main screen.
-        let s = NSScreen.main ?? NSScreen.screens[0]
-        let cx = s.frame.midX
-        let y  = s.frame.maxY - 38
-        notchFrame = CGRect(x: cx - 125, y: y, width: 250, height: 34)
+        let mainScreen = NSScreen.main ?? NSScreen.screens[0]
+        let centerX = mainScreen.frame.midX
+        let topY  = mainScreen.frame.maxY - 38
+        notchFrame = CGRect(x: centerX - 125, y: topY, width: 250, height: 34)
         hasNotch   = false
-        screen     = s
-        debugLog("[NotchGeometry] no notch, fallback on: \(s.localizedName) frame:\(s.frame)")
+        screen     = mainScreen
+        debugLog("[NotchGeometry] no notch, fallback on: \(mainScreen.localizedName) frame:\(mainScreen.frame)")
     }
 
     var compactWindowFrame: CGRect {
