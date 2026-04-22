@@ -23,7 +23,7 @@ struct PillView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onHover { hovering in
-            if hovering { viewModel.onHoverEntered() } else { viewModel.onHoverLeft() }
+            if hovering { viewModel.onPillHoverEntered() } else { viewModel.onHoverLeft() }
         }
     }
 }
@@ -46,8 +46,9 @@ struct CardView: View {
             .clipShape(cardShape)
             .overlay(cardShape.strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5))
             .contentShape(Rectangle())
+            .allowsHitTesting(viewModel.isExpanded)
             .onHover { hovering in
-                if hovering { viewModel.onHoverEntered() } else { viewModel.onHoverLeft() }
+                if hovering { viewModel.onCardHoverEntered() } else { viewModel.onHoverLeft() }
             }
     }
 }

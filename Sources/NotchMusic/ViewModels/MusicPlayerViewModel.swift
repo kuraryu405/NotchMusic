@@ -49,6 +49,11 @@ final class MusicPlayerViewModel: ObservableObject {
         service.previousTrack()
     }
 
+    func restartObserving() {
+        service.stopObserving()
+        service.startObserving()
+    }
+
     // MARK: - Private
 
     private func bindService() {
@@ -78,11 +83,19 @@ final class MusicPlayerViewModel: ObservableObject {
 
     private var collapseTask: DispatchWorkItem?
 
-    /// Call when any NotchMusic window gains hover.
-    func onHoverEntered() {
+    /// Call when the pill window gains hover.
+    /// This is the only hover path that is allowed to trigger expansion.
+    func onPillHoverEntered() {
         collapseTask?.cancel()
         collapseTask = nil
         if currentTrack != nil, !isExpanded { isExpanded = true }
+    }
+
+    /// Call when the card window gains hover.
+    /// Card hover should keep an expanded card open, but never open a collapsed one.
+    func onCardHoverEntered() {
+        collapseTask?.cancel()
+        collapseTask = nil
     }
 
     /// Call when any NotchMusic window loses hover.

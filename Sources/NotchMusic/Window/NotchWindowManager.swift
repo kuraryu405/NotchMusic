@@ -24,7 +24,11 @@ final class NotchWindowManager {
         if pillWindow == nil { pillWindow = makePillWindow() }
         if cardWindow == nil { cardWindow = makeCardWindow() }
         pillWindow?.orderFrontRegardless()
-        cardWindow?.orderFrontRegardless()
+        if viewModel.isExpanded {
+            cardWindow?.orderFrontRegardless()
+        } else {
+            cardWindow?.orderOut(nil)
+        }
     }
 
     // MARK: - Frame helpers
@@ -91,53 +95,39 @@ final class NotchWindowManager {
     private func makeCardWindow() -> NSWindow {
         let win = makeWindow(frame: cardCollapsedFrame(for: geometry))
         win.alphaValue = 0
+        win.ignoresMouseEvents = true
+        win.orderOut(nil)
 
         let hostView = NSHostingView(rootView: CardView(viewModel: viewModel))
         win.contentView = hostView
+        configureCardHostView(hostView)
+        bindCardExpansion(for: win)
+        bindCardTrackCollapse(for: win)
+        observeCardScreenChanges(for: win)
+        return win
+    }
 
+    private func configureCardHostView(_ hostView: NSHostingView<CardView>) {
         // Round the physical bottom corners of the card at the layer level
         // (SwiftUI clipShape alone isn't reliable in NSHostingView)
         hostView.wantsLayer = true
         hostView.layer?.cornerRadius  = 20
         hostView.layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         hostView.layer?.masksToBounds = true
+    }
 
-        // Animate card when expansion changes
+    private func bindCardExpansion(for win: NSWindow) {
         viewModel.$isExpanded
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self, weak win] expanded in
                 guard let self, let win else { return }
-                let geo = self.geometry
-
-                if expanded {
-                    // Flatten pill corners immediately, then open card
-                    self.viewModel.pillCornersFlat = true
-                    let target = self.cardExpandedFrame(for: geo)
-                    NSAnimationContext.runAnimationGroup { ctx in
-                        ctx.duration       = 0.4
-                        ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
-                        win.animator().setFrame(target, display: true)
-                        win.animator().alphaValue = 1
-                    }
-                } else {
-                    // Close card first, THEN round pill corners in completion
-                    let target = self.cardCollapsedFrame(for: geo)
-                    NSAnimationContext.runAnimationGroup({ ctx in
-                        ctx.duration       = 0.4
-                        ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
-                        win.animator().setFrame(target, display: true)
-                        win.animator().alphaValue = 0
-                    }, completionHandler: {
-                        Task { @MainActor [weak self] in
-                            self?.viewModel.pillCornersFlat = false
-                        }
-                    })
-                }
+                self.updateCardWindow(win, expanded: expanded)
             }
             .store(in: &cancellables)
+    }
 
-        // Instant collapse on track stop
+    private func bindCardTrackCollapse(for win: NSWindow) {
         viewModel.$currentTrack
             .map { $0 == nil }
             .removeDuplicates()
@@ -147,10 +137,14 @@ final class NotchWindowManager {
                 guard let self, let win else { return }
                 win.setFrame(self.cardCollapsedFrame(for: self.geometry), display: false, animate: false)
                 win.alphaValue = 0
+                win.ignoresMouseEvents = true
+                win.orderOut(nil)
                 self.viewModel.pillCornersFlat = false
             }
             .store(in: &cancellables)
+    }
 
+    private func observeCardScreenChanges(for win: NSWindow) {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
@@ -162,8 +156,57 @@ final class NotchWindowManager {
                     ? self.cardExpandedFrame(for: self.geometry)
                     : self.cardCollapsedFrame(for: self.geometry)
                 win.setFrame(f, display: true, animate: false)
+                if self.viewModel.isExpanded {
+                    win.ignoresMouseEvents = false
+                    win.alphaValue = 1
+                    win.orderFrontRegardless()
+                } else {
+                    win.ignoresMouseEvents = true
+                    win.alphaValue = 0
+                    win.orderOut(nil)
+                }
             }
         }
-        return win
+    }
+
+    private func updateCardWindow(_ win: NSWindow, expanded: Bool) {
+        let geo = geometry
+
+        if expanded {
+            win.orderFrontRegardless()
+            win.setFrame(cardCollapsedFrame(for: geo), display: false, animate: false)
+            win.alphaValue = 0
+            win.ignoresMouseEvents = false
+            viewModel.pillCornersFlat = true
+            animateCardWindow(win, targetFrame: cardExpandedFrame(for: geo), alpha: 1)
+            return
+        }
+
+        win.ignoresMouseEvents = true
+        animateCardWindow(
+            win,
+            targetFrame: cardCollapsedFrame(for: geo),
+            alpha: 0
+        ) { [weak self, weak win] in
+            Task { @MainActor [weak self, weak win] in
+                self?.viewModel.pillCornersFlat = false
+                win?.ignoresMouseEvents = true
+                win?.orderOut(nil)
+            }
+        }
+    }
+
+    private func animateCardWindow(
+        _ win: NSWindow,
+        targetFrame: NSRect,
+        alpha: CGFloat,
+        completion: (@Sendable () -> Void)? = nil
+    ) {
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration       = 0.4
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
+            win.animator().setFrame(targetFrame, display: true)
+            win.animator().alphaValue = alpha
+        }, completionHandler: completion)
     }
 }
