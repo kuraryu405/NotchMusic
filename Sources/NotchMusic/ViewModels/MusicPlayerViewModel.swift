@@ -49,6 +49,11 @@ final class MusicPlayerViewModel: ObservableObject {
         service.previousTrack()
     }
 
+    func restartObserving() {
+        service.stopObserving()
+        service.startObserving()
+    }
+
     // MARK: - Private
 
     private func bindService() {
