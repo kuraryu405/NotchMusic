@@ -91,6 +91,7 @@ final class NotchWindowManager {
     private func makeCardWindow() -> NSWindow {
         let win = makeWindow(frame: cardCollapsedFrame(for: geometry))
         win.alphaValue = 0
+        win.ignoresMouseEvents = true
 
         let hostView = NSHostingView(rootView: CardView(viewModel: viewModel))
         win.contentView = hostView
@@ -111,6 +112,7 @@ final class NotchWindowManager {
                 let geo = self.geometry
 
                 if expanded {
+                    win.ignoresMouseEvents = false
                     // Flatten pill corners immediately, then open card
                     self.viewModel.pillCornersFlat = true
                     let target = self.cardExpandedFrame(for: geo)
@@ -129,8 +131,9 @@ final class NotchWindowManager {
                         win.animator().setFrame(target, display: true)
                         win.animator().alphaValue = 0
                     }, completionHandler: {
-                        Task { @MainActor [weak self] in
+                        Task { @MainActor [weak self, weak win] in
                             self?.viewModel.pillCornersFlat = false
+                            win?.ignoresMouseEvents = true
                         }
                     })
                 }
@@ -147,6 +150,7 @@ final class NotchWindowManager {
                 guard let self, let win else { return }
                 win.setFrame(self.cardCollapsedFrame(for: self.geometry), display: false, animate: false)
                 win.alphaValue = 0
+                win.ignoresMouseEvents = true
                 self.viewModel.pillCornersFlat = false
             }
             .store(in: &cancellables)
