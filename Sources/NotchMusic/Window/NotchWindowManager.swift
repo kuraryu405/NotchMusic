@@ -24,7 +24,11 @@ final class NotchWindowManager {
         if pillWindow == nil { pillWindow = makePillWindow() }
         if cardWindow == nil { cardWindow = makeCardWindow() }
         pillWindow?.orderFrontRegardless()
-        cardWindow?.orderFrontRegardless()
+        if viewModel.isExpanded {
+            cardWindow?.orderFrontRegardless()
+        } else {
+            cardWindow?.orderOut(nil)
+        }
     }
 
     // MARK: - Frame helpers
@@ -92,6 +96,7 @@ final class NotchWindowManager {
         let win = makeWindow(frame: cardCollapsedFrame(for: geometry))
         win.alphaValue = 0
         win.ignoresMouseEvents = true
+        win.orderOut(nil)
 
         let hostView = NSHostingView(rootView: CardView(viewModel: viewModel))
         win.contentView = hostView
@@ -112,6 +117,9 @@ final class NotchWindowManager {
                 let geo = self.geometry
 
                 if expanded {
+                    win.orderFrontRegardless()
+                    win.setFrame(self.cardCollapsedFrame(for: geo), display: false, animate: false)
+                    win.alphaValue = 0
                     win.ignoresMouseEvents = false
                     // Flatten pill corners immediately, then open card
                     self.viewModel.pillCornersFlat = true
@@ -124,6 +132,7 @@ final class NotchWindowManager {
                     }
                 } else {
                     // Close card first, THEN round pill corners in completion
+                    win.ignoresMouseEvents = true
                     let target = self.cardCollapsedFrame(for: geo)
                     NSAnimationContext.runAnimationGroup({ ctx in
                         ctx.duration       = 0.4
@@ -134,6 +143,7 @@ final class NotchWindowManager {
                         Task { @MainActor [weak self, weak win] in
                             self?.viewModel.pillCornersFlat = false
                             win?.ignoresMouseEvents = true
+                            win?.orderOut(nil)
                         }
                     })
                 }
@@ -151,6 +161,7 @@ final class NotchWindowManager {
                 win.setFrame(self.cardCollapsedFrame(for: self.geometry), display: false, animate: false)
                 win.alphaValue = 0
                 win.ignoresMouseEvents = true
+                win.orderOut(nil)
                 self.viewModel.pillCornersFlat = false
             }
             .store(in: &cancellables)
@@ -166,6 +177,15 @@ final class NotchWindowManager {
                     ? self.cardExpandedFrame(for: self.geometry)
                     : self.cardCollapsedFrame(for: self.geometry)
                 win.setFrame(f, display: true, animate: false)
+                if self.viewModel.isExpanded {
+                    win.ignoresMouseEvents = false
+                    win.alphaValue = 1
+                    win.orderFrontRegardless()
+                } else {
+                    win.ignoresMouseEvents = true
+                    win.alphaValue = 0
+                    win.orderOut(nil)
+                }
             }
         }
         return win
