@@ -186,7 +186,7 @@ struct LaunchAgentManager: LaunchAgentManaging {
         process.waitUntilExit()
 
         let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(decoding: data, as: UTF8.self)
+        let output = String(data: data, encoding: .utf8) ?? ""
 
         guard process.terminationStatus == 0 else {
             throw LaunchAgentError.launchctlFailed(output.trimmingCharacters(in: .whitespacesAndNewlines))
