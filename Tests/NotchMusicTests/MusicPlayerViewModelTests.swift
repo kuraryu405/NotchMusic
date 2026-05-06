@@ -1,4 +1,5 @@
 @testable import NotchMusic
+import AppKit
 import XCTest
 
 @MainActor
@@ -46,6 +47,43 @@ final class MusicPlayerViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isExpanded)
     }
 
+    func test_whenTrackChangesBeforePlaybackStarts_expandsAfterPlayingEvent() {
+        let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
+
+        service.simulateTrack(track)
+        XCTAssertFalse(sut.isExpanded)
+
+        service.simulatePlaying(true)
+        XCTAssertTrue(sut.isExpanded)
+    }
+
+    func test_whenPausedClearsPendingTrackExpansion() {
+        let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
+
+        service.simulateTrack(track)
+        service.simulatePlaying(false)
+        service.simulatePlaying(true)
+
+        XCTAssertFalse(sut.isExpanded)
+    }
+
+    func test_whenArtworkUpdatesWhilePaused_doesNotExpand() {
+        let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
+        let trackWithArtwork = Track(
+            title: "Test",
+            artist: "Artist",
+            album: "Album",
+            duration: 200,
+            artwork: NSImage(size: NSSize(width: 10, height: 10))
+        )
+
+        service.simulateTrack(track)
+        service.simulatePlaying(false)
+        service.simulateTrack(trackWithArtwork)
+
+        XCTAssertFalse(sut.isExpanded)
+    }
+
     // MARK: - Playback state
 
     func test_whenServiceEmitsPlaying_isPlayingUpdates() {
@@ -57,6 +95,16 @@ final class MusicPlayerViewModelTests: XCTestCase {
         sut.isExpanded = true
         service.simulatePlaying(false)
         XCTAssertFalse(sut.isExpanded)
+    }
+
+    func test_whenPausedWhileHovering_keepsExpanded() {
+        let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
+        service.simulateTrack(track)
+        sut.onPillHoverEntered()
+
+        service.simulatePlaying(false)
+
+        XCTAssertTrue(sut.isExpanded)
     }
 
     // MARK: - Progress

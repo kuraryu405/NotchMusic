@@ -15,7 +15,7 @@ struct SettingsView: View {
             }
             .padding(20)
         }
-        .frame(width: 500, height: 460)
+        .frame(width: 500, height: 540)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear { settingsViewModel.refreshPermissionStatus() }
         .alert(
@@ -78,31 +78,27 @@ struct SettingsView: View {
     }
 
     private var permissionsSection: some View {
-        SettingsSection(title: "Permissions", description: "Apple Music との連携状態を確認できます。") {
+        SettingsSection(title: "Permissions", description: "音楽アプリとの連携状態を確認できます。") {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Apple Music Automation")
-                            .font(.system(size: 13, weight: .medium))
-                        Text(settingsViewModel.permissionStatus.detail)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 12)
-                    StatusBadge(
-                        title: settingsViewModel.permissionStatus.title,
-                        color: Color(settingsViewModel.permissionStatus.tint)
-                    )
-                }
+                permissionRow(
+                    app: .appleMusic,
+                    status: settingsViewModel.appleMusicPermissionStatus,
+                    checkAction: settingsViewModel.requestAppleMusicAccess,
+                    openAction: settingsViewModel.openAppleMusic
+                )
+
+                Divider()
+
+                permissionRow(
+                    app: .spotify,
+                    status: settingsViewModel.spotifyPermissionStatus,
+                    checkAction: settingsViewModel.requestSpotifyAccess,
+                    openAction: settingsViewModel.openSpotify
+                )
+
+                Divider()
 
                 HStack(spacing: 10) {
-                    Button("アクセス確認") {
-                        settingsViewModel.requestAppleMusicAccess()
-                    }
-                    Button("Apple Music を開く") {
-                        settingsViewModel.openAppleMusic()
-                    }
                     Button("再接続") {
                         playerViewModel.restartObserving()
                         settingsViewModel.refreshPermissionStatus()
@@ -111,6 +107,36 @@ struct SettingsView: View {
                         settingsViewModel.isShowingPermissionHelp = true
                     }
                 }
+            }
+        }
+    }
+
+    private func permissionRow(
+        app: ScriptableMusicApp,
+        status: MusicAppPermissionStatus,
+        checkAction: @escaping () -> Void,
+        openAction: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(app.displayName) Automation")
+                        .font(.system(size: 13, weight: .medium))
+                    Text(status.detail(for: app))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                StatusBadge(
+                    title: status.title(for: app),
+                    color: Color(status.tint)
+                )
+            }
+
+            HStack(spacing: 10) {
+                Button("アクセス確認", action: checkAction)
+                Button("\(app.displayName) を開く", action: openAction)
             }
         }
     }
@@ -204,13 +230,13 @@ private struct PermissionHelpView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Apple Music 権限の通し方")
+            Text("音楽アプリ権限の通し方")
                 .font(.system(size: 18, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("1. `Apple Music を開く` を押して Music.app を前面に出します。")
+                Text("1. 使う音楽アプリを開いて前面に出します。")
                 Text("2. `アクセス確認` を押すと、必要に応じて macOS の確認ダイアログが表示されます。")
-                Text("3. 拒否済みだった場合は `System Settings` を開き、`Privacy & Security > Automation` で NotchMusic から Music を許可します。")
+                Text("3. 拒否済みだった場合は `System Settings` を開き、`Privacy & Security > Automation` で NotchMusic から Music または Spotify を許可します。")
                 Text("4. 設定後に `再接続` を押すと再取得しやすくなります。")
             }
             .font(.system(size: 12))

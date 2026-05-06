@@ -56,6 +56,10 @@ final class MusicPlayerViewModel: ObservableObject {
 
     // MARK: - Private
 
+    private var pendingAutoExpand = false
+    private var autoCollapseTask: Task<Void, Never>?
+    private var isHovering = false
+
     private func bindService() {
         // Both MediaRemoteService and this ViewModel are @MainActor,
         // so callbacks are always delivered on the main actor — no Task wrapper needed.
@@ -63,15 +67,34 @@ final class MusicPlayerViewModel: ObservableObject {
             guard let self else { return }
             debugLog("[ViewModel] onTrackChanged: \(track?.title ?? "nil")")
             let previous = currentTrack
+            let songChanged = !representsSameSong(track, previous)
             currentTrack = track
-            if track == nil { isExpanded = false }
-            if track != nil, track != previous { brieflyExpand() }
+
+            guard track != nil else {
+                collapseImmediately()
+                return
+            }
+
+            guard songChanged else { return }
+
+            if isPlaying {
+                brieflyExpand()
+            } else {
+                pendingAutoExpand = true
+            }
         }
 
         service.onPlaybackStateChanged = { [weak self] playing in
             guard let self else { return }
             isPlaying = playing
-            if !playing { isExpanded = false }
+            if playing {
+                if pendingAutoExpand {
+                    pendingAutoExpand = false
+                    brieflyExpand()
+                }
+            } else {
+                collapseForPlaybackPause()
+            }
         }
 
         service.onProgressChanged = { [weak self] elapsed in
@@ -86,22 +109,27 @@ final class MusicPlayerViewModel: ObservableObject {
     /// Call when the pill window gains hover.
     /// This is the only hover path that is allowed to trigger expansion.
     func onPillHoverEntered() {
+        isHovering = true
         collapseTask?.cancel()
         collapseTask = nil
+        cancelAutoCollapse()
         if currentTrack != nil, !isExpanded { isExpanded = true }
     }
 
     /// Call when the card window gains hover.
     /// Card hover should keep an expanded card open, but never open a collapsed one.
     func onCardHoverEntered() {
+        isHovering = true
         collapseTask?.cancel()
         collapseTask = nil
+        cancelAutoCollapse()
     }
 
     /// Call when any NotchMusic window loses hover.
     func onHoverLeft() {
         collapseTask?.cancel()
         let task = DispatchWorkItem { [weak self] in
+            self?.isHovering = false
             self?.isExpanded = false
         }
         collapseTask = task
@@ -110,10 +138,46 @@ final class MusicPlayerViewModel: ObservableObject {
 
     /// Expands for 3 s on track change, then collapses (unless the user is hovering).
     private func brieflyExpand() {
+        cancelAutoCollapse()
         isExpanded = true
-        Task {
+        autoCollapseTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(3))
-            if self.isExpanded { self.isExpanded = false }
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                if self.isExpanded, !self.isHovering { self.isExpanded = false }
+                self.autoCollapseTask = nil
+            }
         }
+    }
+
+    private func collapseImmediately() {
+        pendingAutoExpand = false
+        cancelAutoCollapse()
+        isExpanded = false
+    }
+
+    private func collapseForPlaybackPause() {
+        pendingAutoExpand = false
+        cancelAutoCollapse()
+        if currentTrack != nil, isHovering {
+            isExpanded = true
+        } else {
+            isExpanded = false
+        }
+    }
+
+    private func cancelAutoCollapse() {
+        autoCollapseTask?.cancel()
+        autoCollapseTask = nil
+    }
+
+    private func representsSameSong(_ lhs: Track?, _ rhs: Track?) -> Bool {
+        guard let lhs, let rhs else {
+            return lhs == nil && rhs == nil
+        }
+        return lhs.title == rhs.title &&
+            lhs.artist == rhs.artist &&
+            lhs.album == rhs.album
     }
 }

@@ -7,7 +7,7 @@ MacBookのノッチをDynamic Island風の音楽プレーヤーに変えるmacOS
 
 ## 概要
 
-Apple Musicで再生中の曲をノッチエリアに表示します。ホバーするとアルバムアートや再生コントロールが展開されます。
+Apple Music / Spotifyで再生中の曲をノッチエリアに表示します。ホバーするとアルバムアートや再生コントロールが展開されます。
 
 ## 機能
 
@@ -46,7 +46,7 @@ Apple Musicで再生中の曲をノッチエリアに表示します。ホバー
 
 - macOS 14 Sonoma 以降（macOS 26 Beta 動作確認済み）
 - ノッチ付き MacBook（Pro 14/16", Air 13"/15" M2/M3 以降）
-- Apple Music
+- Apple Music または Spotify
 
 ## インストール
 

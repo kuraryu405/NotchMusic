@@ -8,16 +8,17 @@ final class SettingsViewModel: ObservableObject {
     @Published private(set) var launchAtLoginEnabled: Bool
     @Published private(set) var canConfigureLaunchAtLogin: Bool
     @Published private(set) var launchAtLoginHint: String
-    @Published private(set) var permissionStatus: AppleMusicPermissionStatus = .unknown
+    @Published private(set) var appleMusicPermissionStatus: MusicAppPermissionStatus = .unknown
+    @Published private(set) var spotifyPermissionStatus: MusicAppPermissionStatus = .unknown
     @Published var alertMessage: String?
     @Published var isShowingPermissionHelp = false
 
     private let launchAgentManager: LaunchAgentManaging
-    private let permissionChecker: AppleMusicPermissionChecking
+    private let permissionChecker: MusicAppPermissionChecking
 
     init(
         launchAgentManager: LaunchAgentManaging = LaunchAgentManager(),
-        permissionChecker: AppleMusicPermissionChecking = AppleMusicPermissionChecker()
+        permissionChecker: MusicAppPermissionChecking = MusicAppPermissionChecker()
     ) {
         self.launchAgentManager = launchAgentManager
         self.permissionChecker = permissionChecker
@@ -33,11 +34,16 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func refreshPermissionStatus() {
-        permissionStatus = permissionChecker.checkStatus(launchIfNeeded: false)
+        appleMusicPermissionStatus = permissionChecker.checkStatus(for: .appleMusic, launchIfNeeded: false)
+        spotifyPermissionStatus = permissionChecker.checkStatus(for: .spotify, launchIfNeeded: false)
     }
 
     func requestAppleMusicAccess() {
-        permissionStatus = permissionChecker.checkStatus(launchIfNeeded: true)
+        appleMusicPermissionStatus = permissionChecker.checkStatus(for: .appleMusic, launchIfNeeded: true)
+    }
+
+    func requestSpotifyAccess() {
+        spotifyPermissionStatus = permissionChecker.checkStatus(for: .spotify, launchIfNeeded: true)
     }
 
     func setLaunchAtLoginEnabled(_ enabled: Bool) {
@@ -51,8 +57,16 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func openAppleMusic() {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") else {
-            alertMessage = "Apple Music が見つかりませんでした。"
+        openMusicApp(.appleMusic)
+    }
+
+    func openSpotify() {
+        openMusicApp(.spotify)
+    }
+
+    private func openMusicApp(_ app: ScriptableMusicApp) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else {
+            alertMessage = "\(app.displayName) が見つかりませんでした。"
             return
         }
         NSWorkspace.shared.open(url)
@@ -217,35 +231,71 @@ enum LaunchAgentError: LocalizedError {
     }
 }
 
-protocol AppleMusicPermissionChecking {
-    func checkStatus(launchIfNeeded: Bool) -> AppleMusicPermissionStatus
+enum ScriptableMusicApp {
+    case appleMusic
+    case spotify
+
+    var displayName: String {
+        switch self {
+        case .appleMusic:
+            return "Apple Music"
+        case .spotify:
+            return "Spotify"
+        }
+    }
+
+    var bundleIdentifier: String {
+        switch self {
+        case .appleMusic:
+            return "com.apple.Music"
+        case .spotify:
+            return "com.spotify.client"
+        }
+    }
+
+    var appleScriptName: String {
+        switch self {
+        case .appleMusic:
+            return "Music"
+        case .spotify:
+            return "Spotify"
+        }
+    }
 }
 
-struct AppleMusicPermissionChecker: AppleMusicPermissionChecking {
+protocol MusicAppPermissionChecking {
+    func checkStatus(for app: ScriptableMusicApp, launchIfNeeded: Bool) -> MusicAppPermissionStatus
+}
+
+struct MusicAppPermissionChecker: MusicAppPermissionChecking {
     private let workspace: NSWorkspace
 
     init(workspace: NSWorkspace = .shared) {
         self.workspace = workspace
     }
 
-    func checkStatus(launchIfNeeded: Bool) -> AppleMusicPermissionStatus {
-        if launchIfNeeded, let url = workspace.urlForApplication(withBundleIdentifier: "com.apple.Music") {
+    func checkStatus(for app: ScriptableMusicApp, launchIfNeeded: Bool) -> MusicAppPermissionStatus {
+        guard let url = workspace.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else {
+            return .notInstalled
+        }
+
+        if launchIfNeeded {
             workspace.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
 
-        let musicIsRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty
-        guard musicIsRunning || launchIfNeeded else {
-            return .musicClosed
+        let appIsRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleIdentifier).isEmpty
+        guard appIsRunning || launchIfNeeded else {
+            return .appClosed
         }
 
         let source = """
-        tell application "Music"
+        tell application "\(app.appleScriptName)"
             get player state
         end tell
         """
 
         guard let script = NSAppleScript(source: source) else {
-            return .error("Apple Music の権限確認スクリプトを作成できませんでした。")
+            return .error("\(app.displayName) の権限確認スクリプトを作成できませんでした。")
         }
 
         var error: NSDictionary?
@@ -258,7 +308,7 @@ struct AppleMusicPermissionChecker: AppleMusicPermissionChecking {
         let code = error[NSAppleScript.errorNumber] as? Int ?? 0
         let message = (error[NSAppleScript.errorBriefMessage] as? String)
             ?? (error[NSAppleScript.errorMessage] as? String)
-            ?? "Apple Music との通信を確認できませんでした。"
+            ?? "\(app.displayName) との通信を確認できませんでした。"
 
         if code == -1743 {
             return .denied
@@ -268,19 +318,22 @@ struct AppleMusicPermissionChecker: AppleMusicPermissionChecking {
     }
 }
 
-enum AppleMusicPermissionStatus: Equatable {
+enum MusicAppPermissionStatus: Equatable {
     case unknown
-    case musicClosed
+    case notInstalled
+    case appClosed
     case granted
     case denied
     case error(String)
 
-    var title: String {
+    func title(for app: ScriptableMusicApp) -> String {
         switch self {
         case .unknown:
             return "未確認"
-        case .musicClosed:
-            return "Apple Music待ち"
+        case .notInstalled:
+            return "未検出"
+        case .appClosed:
+            return "\(app.displayName)待ち"
         case .granted:
             return "許可済み"
         case .denied:
@@ -290,16 +343,18 @@ enum AppleMusicPermissionStatus: Equatable {
         }
     }
 
-    var detail: String {
+    func detail(for app: ScriptableMusicApp) -> String {
         switch self {
         case .unknown:
-            return "Apple Music を開いた状態でアクセス確認を押すと、必要に応じて macOS の許可ダイアログが表示されます。"
-        case .musicClosed:
-            return "Apple Music が閉じています。開いてからアクセス確認を押すと、権限状態を確認できます。"
+            return "\(app.displayName) を開いた状態でアクセス確認を押すと、必要に応じて macOS の許可ダイアログが表示されます。"
+        case .notInstalled:
+            return "\(app.displayName) が見つかりませんでした。インストール済みの場合は一度起動してから再確認してください。"
+        case .appClosed:
+            return "\(app.displayName) が閉じています。開いてからアクセス確認を押すと、権限状態を確認できます。"
         case .granted:
-            return "NotchMusic は Apple Music の再生情報を読み取れます。表示が戻らない場合は再接続を試してください。"
+            return "NotchMusic は \(app.displayName) の再生情報を読み取れます。表示が戻らない場合は再接続を試してください。"
         case .denied:
-            return "macOS 側で NotchMusic の Apple Music 操作が許可されていません。System Settings の Privacy & Security > Automation で許可してください。"
+            return "macOS 側で NotchMusic の \(app.displayName) 操作が許可されていません。System Settings の Privacy & Security > Automation で許可してください。"
         case .error(let message):
             return message
         }
@@ -309,7 +364,7 @@ enum AppleMusicPermissionStatus: Equatable {
         switch self {
         case .granted:
             return .systemGreen
-        case .musicClosed, .unknown:
+        case .appClosed, .notInstalled, .unknown:
             return .systemOrange
         case .denied, .error:
             return .systemRed

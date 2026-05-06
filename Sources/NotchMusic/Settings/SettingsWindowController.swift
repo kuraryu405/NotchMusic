@@ -9,7 +9,7 @@ final class SettingsWindowController: NSWindowController {
         self.settingsViewModel = settingsViewModel
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 540),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false

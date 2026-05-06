@@ -27,6 +27,8 @@ Sources/NotchMusic/
     MusicPlayerViewModel.swift — @Published状態、ホバー制御
   Services/
     AppleMusicService.swift    — Apple Music連携（通知＋AppleScript）
+    SpotifyMusicService.swift  — Spotify連携（通知＋AppleScript）
+    CompositeMusicService.swift — Apple Music / Spotifyの統合
     MusicServiceProtocol.swift — サービスプロトコル
   Models/
     Track.swift            — 曲情報モデル（artwork: NSImage?含む）
@@ -46,11 +48,13 @@ cardWindow  → 展開時のみ表示。ノッチ下端から下方向にアニ�
 
 ## 音楽検出
 
-- **主経路**: `com.apple.Music.playerInfo` 分散通知 → 曲変更を即時検出
-- **ポーリング**: NSAppleScript 2秒毎（進捗更新目的）→ TCC権限が必要
-- **アートワーク**: iTunes Search API (`itunes.apple.com/search`) → 100x100 → 600x600に差し替え
+- **Apple Music**: `com.apple.Music.playerInfo` 分散通知 + NSAppleScript
+- **Spotify**: `com.spotify.client.PlaybackStateChanged` 分散通知 + NSAppleScript
+- **統合**: `CompositeMusicService` が最後にイベントを出したアプリを active source としてUIへ流す
+- **ポーリング**: 再生中のみ5秒ごと（進捗更新目的）→ TCC権限が必要
+- **アートワーク**: Apple Music は iTunes Search API、Spotify は `artwork url` を取得
 
-TCC権限（AppleEvents for Music.app）がないとポーリングが空を返す。
+TCC権限（AppleEvents for Music.app / Spotify.app）がないとポーリングや操作が失敗する。
 `tccutil reset AppleEvents dev.notchmusic.app` でリセット後、再起動すると権限ダイアログが出る。
 
 ## 主要な寸法（NotchGeometry）
@@ -83,7 +87,7 @@ TCC権限（AppleEvents for Music.app）がないとポーリングが空を返�
 ### 残課題 / 改善案
 - [ ] ノッチ形状の再現精度：ノッチ底辺の凸カーブにカードを密着させる（現状は直角フラット接続）
 - [ ] AppleScript TCC権限の案内UI（権限なしでもポーリングが静かに失敗する）
-- [ ] Spotifyサポート（MusicServiceProtocol実装済み、SpotifyService未実装）
+- [x] Spotifyサポート（通知＋AppleScript）
 - [ ] カラーテーマ：アルバムアートから抽出したアクセントカラーをUIに反映
 - [ ] シークバーをインタラクティブに（クリックでシーク）
 - [ ] LaunchAgent対応（ログイン時自動起動）
@@ -107,7 +111,7 @@ artwork の比較は `===`（参照等値）必須。`==` にすると NSImage �
 
 | 症状 | 原因 | 対処 |
 |------|------|------|
-| ピルが表示されない | 曲が停止中 | Apple Musicで再生開始 |
+| ピルが表示されない | 曲が停止中 | Apple Music または Spotify で再生開始 |
 | アートワークが出ない | iTunes API の遅延 or 曲名不一致 | 数秒待つ、または別曲で確認 |
 | 座標が大幅にズレる | 外部モニターをメインにしている | Built-in Display をメインに |
 | ポーリングが空 | TCC未許可 | `tccutil reset AppleEvents dev.notchmusic.app` → 再起動 |

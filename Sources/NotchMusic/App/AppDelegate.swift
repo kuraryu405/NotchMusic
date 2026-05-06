@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Run as an accessory app (no Dock icon, no main window).
         NSApp.setActivationPolicy(.accessory)
 
-        let service = AppleMusicService()
+        let service = CompositeMusicService()
         let playerViewModel = MusicPlayerViewModel(service: service)
         viewModel = playerViewModel
         settingsViewModel = SettingsViewModel()
