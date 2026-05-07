@@ -85,11 +85,7 @@ final class CompositeMusicService: MusicServiceProtocol {
         }
 
         if let track {
-            activeSource = source
-            onTrackChanged?(track)
-            if let state = states[source] {
-                onProgressChanged?(state.elapsed)
-            }
+            maybeActivateSourceWithTrack(track, from: source)
             return
         }
 
@@ -149,6 +145,22 @@ final class CompositeMusicService: MusicServiceProtocol {
             .filter { matches($0.value) }
             .max { $0.value.lastUpdated < $1.value.lastUpdated }?
             .key
+    }
+
+    private func maybeActivateSourceWithTrack(_ track: Track, from source: MusicServiceSource) {
+        guard let state = states[source] else { return }
+        let hasOtherPlayingSource = states.contains { candidateSource, candidateState in
+            candidateSource != source &&
+                candidateState.isPlaying
+        }
+
+        guard state.isPlaying || activeSource == source || !hasOtherPlayingSource else {
+            return
+        }
+
+        activeSource = source
+        onTrackChanged?(track)
+        onProgressChanged?(state.elapsed)
     }
 
     @discardableResult

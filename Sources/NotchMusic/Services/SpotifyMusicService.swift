@@ -14,6 +14,7 @@ final class SpotifyMusicService: MusicServiceProtocol {
     private var pollTimer: Timer?
     private var lastTrackID: String = ""
     private var lastFullTrack: Track?
+    private var pendingArtworkTrackID: String?
 
     func startObserving() {
         subscribeToDistributedNotifications()
@@ -169,6 +170,9 @@ final class SpotifyMusicService: MusicServiceProtocol {
         artworkURL: String?
     ) {
         if trackID == lastTrackID {
+            if lastFullTrack?.artwork == nil, let artworkURL {
+                fetchArtworkIfNeeded(from: artworkURL, for: trackID)
+            }
             return
         }
 
@@ -178,33 +182,45 @@ final class SpotifyMusicService: MusicServiceProtocol {
         onTrackChanged?(track)
 
         if let artworkURL {
-            fetchArtwork(from: artworkURL, for: trackID)
+            fetchArtworkIfNeeded(from: artworkURL, for: trackID)
         }
     }
 
     private func clearStoppedTrack() {
         lastTrackID = ""
         lastFullTrack = nil
+        pendingArtworkTrackID = nil
         onPlaybackStateChanged?(false)
         onTrackChanged?(nil)
         stopPollTimer()
     }
 
-    private func fetchArtwork(from artworkURL: String, for trackID: String) {
+    private func fetchArtworkIfNeeded(from artworkURL: String, for trackID: String) {
+        guard pendingArtworkTrackID != trackID else { return }
         guard let url = URL(string: artworkURL) else { return }
+        pendingArtworkTrackID = trackID
         debugLog("[Spotify] fetching artwork: \(artworkURL)")
 
         URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             guard let self else { return }
             if let error {
                 debugLog("[Spotify] artwork error: \(error)")
+                Task { @MainActor [weak self] in
+                    self?.clearPendingArtwork(for: trackID)
+                }
                 return
             }
-            guard let data, let image = NSImage(data: data) else { return }
+            guard let data, let image = NSImage(data: data) else {
+                Task { @MainActor [weak self] in
+                    self?.clearPendingArtwork(for: trackID)
+                }
+                return
+            }
 
             Task { @MainActor [weak self] in
-                guard let self,
-                      self.lastTrackID == trackID,
+                guard let self else { return }
+                self.clearPendingArtwork(for: trackID)
+                guard self.lastTrackID == trackID,
                       let base = self.lastFullTrack else { return }
                 let artTrack = Track(
                     title: base.title,
@@ -217,6 +233,12 @@ final class SpotifyMusicService: MusicServiceProtocol {
                 self.onTrackChanged?(artTrack)
             }
         }.resume()
+    }
+
+    private func clearPendingArtwork(for trackID: String) {
+        if pendingArtworkTrackID == trackID {
+            pendingArtworkTrackID = nil
+        }
     }
 
     @discardableResult
