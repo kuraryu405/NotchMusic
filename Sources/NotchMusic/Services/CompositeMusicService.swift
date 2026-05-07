@@ -95,14 +95,7 @@ final class CompositeMusicService: MusicServiceProtocol {
 
         guard activeSource == source else { return }
 
-        if let fallback = mostRecentSource(where: { $0.isPlaying && $0.track != nil }),
-           let fallbackState = states[fallback],
-           let fallbackTrack = fallbackState.track {
-            activeSource = fallback
-            onTrackChanged?(fallbackTrack)
-            onProgressChanged?(fallbackState.elapsed)
-            onPlaybackStateChanged?(fallbackState.isPlaying)
-        } else {
+        if !activateMostRecentPlayingSource() {
             activeSource = nil
             onTrackChanged?(nil)
             onProgressChanged?(0)
@@ -125,7 +118,9 @@ final class CompositeMusicService: MusicServiceProtocol {
         }
 
         if activeSource == source {
-            onPlaybackStateChanged?(false)
+            if !activateMostRecentPlayingSource() {
+                onPlaybackStateChanged?(false)
+            }
         }
     }
 
@@ -154,5 +149,20 @@ final class CompositeMusicService: MusicServiceProtocol {
             .filter { matches($0.value) }
             .max { $0.value.lastUpdated < $1.value.lastUpdated }?
             .key
+    }
+
+    @discardableResult
+    private func activateMostRecentPlayingSource() -> Bool {
+        guard let fallback = mostRecentSource(where: { $0.isPlaying && $0.track != nil }),
+              let fallbackState = states[fallback],
+              let fallbackTrack = fallbackState.track else {
+            return false
+        }
+
+        activeSource = fallback
+        onTrackChanged?(fallbackTrack)
+        onProgressChanged?(fallbackState.elapsed)
+        onPlaybackStateChanged?(fallbackState.isPlaying)
+        return true
     }
 }

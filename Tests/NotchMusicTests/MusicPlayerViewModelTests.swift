@@ -2,82 +2,83 @@
 import AppKit
 import XCTest
 
-@MainActor
 final class MusicPlayerViewModelTests: XCTestCase {
-    // All tests run on the MainActor to match @MainActor service/viewmodel isolation.
-
-    private var service: MockMusicService!
-    private var sut: MusicPlayerViewModel!
-
-    override func setUp() {
-        super.setUp()
-        service = MockMusicService()
-        sut     = MusicPlayerViewModel(service: service, missingTrackGracePeriod: .zero)
-    }
-
-    override func tearDown() {
-        sut     = nil
-        service = nil
-        super.tearDown()
-    }
-
-    // MARK: - startObserving
-
+    @MainActor
     func test_startObserving_forwardsToService() {
-        sut.startObserving()
-        XCTAssertTrue(service.didStartObserving)
+        let harness = makeHarness()
+
+        harness.sut.startObserving()
+
+        XCTAssertTrue(harness.service.didStartObserving)
     }
 
-    // MARK: - Track changes
-
+    @MainActor
     func test_whenServiceEmitsTrack_viewModelUpdates() {
+        let harness = makeHarness()
         let track = Track(title: "Bohemian Rhapsody", artist: "Queen", album: "A Night at the Opera", duration: 354)
-        service.simulateTrack(track)
-        XCTAssertEqual(sut.currentTrack, track)
+
+        harness.service.simulateTrack(track)
+
+        XCTAssertEqual(harness.sut.currentTrack, track)
     }
 
+    @MainActor
     func test_whenServiceEmitsNilTrack_currentTrackIsNil() {
-        service.simulateTrack(nil)
-        XCTAssertNil(sut.currentTrack)
+        let harness = makeHarness()
+
+        harness.service.simulateTrack(nil)
+
+        XCTAssertNil(harness.sut.currentTrack)
     }
 
+    @MainActor
     func test_whenTrackBecomesNil_isExpandedCollapses() {
-        sut.isExpanded = true
-        service.simulateTrack(nil)
-        XCTAssertFalse(sut.isExpanded)
+        let harness = makeHarness()
+        harness.sut.isExpanded = true
+
+        harness.service.simulateTrack(nil)
+
+        XCTAssertFalse(harness.sut.isExpanded)
     }
 
+    @MainActor
     func test_transientNilTrackKeepsLastTrackDuringGracePeriod() {
+        let harness = makeHarness(missingTrackGracePeriod: .seconds(1))
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
-        sut = MusicPlayerViewModel(service: service, missingTrackGracePeriod: .seconds(1))
 
-        service.simulateTrack(track)
-        service.simulateTrack(nil)
+        harness.service.simulateTrack(track)
+        harness.service.simulateTrack(nil)
 
-        XCTAssertEqual(sut.currentTrack, track)
+        XCTAssertEqual(harness.sut.currentTrack, track)
     }
 
+    @MainActor
     func test_whenTrackChangesBeforePlaybackStarts_expandsAfterPlayingEvent() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
 
-        service.simulateTrack(track)
-        XCTAssertFalse(sut.isExpanded)
+        harness.service.simulateTrack(track)
+        XCTAssertFalse(harness.sut.isExpanded)
 
-        service.simulatePlaying(true)
-        XCTAssertTrue(sut.isExpanded)
+        harness.service.simulatePlaying(true)
+        XCTAssertTrue(harness.sut.isExpanded)
     }
 
+    @MainActor
     func test_whenPausedClearsPendingTrackExpansion() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
 
-        service.simulateTrack(track)
-        service.simulatePlaying(false)
-        service.simulatePlaying(true)
+        harness.service.simulateTrack(track)
+        harness.service.simulatePlaying(false)
+        harness.service.simulatePlaying(true)
 
-        XCTAssertFalse(sut.isExpanded)
+        XCTAssertFalse(harness.sut.isExpanded)
     }
 
+    @MainActor
     func test_whenArtworkUpdatesWhilePaused_doesNotExpand() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
         let trackWithArtwork = Track(
             title: "Test",
@@ -87,73 +88,121 @@ final class MusicPlayerViewModelTests: XCTestCase {
             artwork: NSImage(size: NSSize(width: 10, height: 10))
         )
 
-        service.simulateTrack(track)
-        service.simulatePlaying(false)
-        service.simulateTrack(trackWithArtwork)
+        harness.service.simulateTrack(track)
+        harness.service.simulatePlaying(false)
+        harness.service.simulateTrack(trackWithArtwork)
 
-        XCTAssertFalse(sut.isExpanded)
+        XCTAssertFalse(harness.sut.isExpanded)
     }
 
-    // MARK: - Playback state
-
+    @MainActor
     func test_whenServiceEmitsPlaying_isPlayingUpdates() {
-        service.simulatePlaying(true)
-        XCTAssertTrue(sut.isPlaying)
+        let harness = makeHarness()
+
+        harness.service.simulatePlaying(true)
+
+        XCTAssertTrue(harness.sut.isPlaying)
     }
 
+    @MainActor
     func test_whenServiceEmitsPaused_isExpandedCollapses() {
-        sut.isExpanded = true
-        service.simulatePlaying(false)
-        XCTAssertFalse(sut.isExpanded)
+        let harness = makeHarness()
+        harness.sut.isExpanded = true
+
+        harness.service.simulatePlaying(false)
+
+        XCTAssertFalse(harness.sut.isExpanded)
     }
 
+    @MainActor
     func test_whenPausedWhileHovering_keepsExpanded() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
-        service.simulateTrack(track)
-        sut.onPillHoverEntered()
+        harness.service.simulateTrack(track)
+        harness.sut.onPillHoverEntered()
 
-        service.simulatePlaying(false)
+        harness.service.simulatePlaying(false)
 
-        XCTAssertTrue(sut.isExpanded)
+        XCTAssertTrue(harness.sut.isExpanded)
     }
 
-    // MARK: - Progress
-
+    @MainActor
     func test_progressCalculation_withDuration() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
-        service.simulateTrack(track)
-        service.simulateProgress(50)
-        XCTAssertEqual(sut.progress, 0.25, accuracy: 0.001)
+
+        harness.service.simulateTrack(track)
+        harness.service.simulateProgress(50)
+
+        XCTAssertEqual(harness.sut.progress, 0.25, accuracy: 0.001)
     }
 
+    @MainActor
     func test_progressCalculation_withZeroDuration_returnsZero() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 0)
-        service.simulateTrack(track)
-        service.simulateProgress(10)
-        XCTAssertEqual(sut.progress, 0)
+
+        harness.service.simulateTrack(track)
+        harness.service.simulateProgress(10)
+
+        XCTAssertEqual(harness.sut.progress, 0)
     }
 
+    @MainActor
     func test_progressClampsToOne() {
+        let harness = makeHarness()
         let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 100)
-        service.simulateTrack(track)
-        service.simulateProgress(150)
-        XCTAssertEqual(sut.progress, 1.0)
+
+        harness.service.simulateTrack(track)
+        harness.service.simulateProgress(150)
+
+        XCTAssertEqual(harness.sut.progress, 1.0)
     }
 
-    // MARK: - Control delegation
-
+    @MainActor
     func test_togglePlayPause_delegatesToService() {
-        sut.togglePlayPause()
-        XCTAssertEqual(service.togglePlayPauseCount, 1)
+        let harness = makeHarness()
+
+        harness.sut.togglePlayPause()
+
+        XCTAssertEqual(harness.service.togglePlayPauseCount, 1)
     }
 
+    @MainActor
     func test_nextTrack_delegatesToService() {
-        sut.nextTrack()
-        XCTAssertEqual(service.nextTrackCount, 1)
+        let harness = makeHarness()
+
+        harness.sut.nextTrack()
+
+        XCTAssertEqual(harness.service.nextTrackCount, 1)
     }
 
+    @MainActor
     func test_previousTrack_delegatesToService() {
-        sut.previousTrack()
-        XCTAssertEqual(service.previousTrackCount, 1)
+        let harness = makeHarness()
+
+        harness.sut.previousTrack()
+
+        XCTAssertEqual(harness.service.previousTrackCount, 1)
+    }
+
+    @MainActor
+    private func makeHarness(
+        missingTrackGracePeriod: Duration = .zero
+    ) -> MusicPlayerViewModelHarness {
+        MusicPlayerViewModelHarness(missingTrackGracePeriod: missingTrackGracePeriod)
+    }
+}
+
+@MainActor
+private final class MusicPlayerViewModelHarness {
+    let service = MockMusicService()
+    let sut: MusicPlayerViewModel
+
+    init(missingTrackGracePeriod: Duration) {
+        sut = MusicPlayerViewModel(
+            service: service,
+            missingTrackGracePeriod: missingTrackGracePeriod
+        )
     }
 }

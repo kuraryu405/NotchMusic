@@ -54,11 +54,7 @@ final class SpotifyMusicService: MusicServiceProtocol {
 
         let state = (info["Player State"] as? String ?? "").lowercased()
         if state == "stopped" {
-            lastTrackID = ""
-            lastFullTrack = nil
-            onPlaybackStateChanged?(false)
-            onTrackChanged?(nil)
-            stopPollTimer()
+            clearStoppedTrack()
             return
         }
 
@@ -102,11 +98,7 @@ final class SpotifyMusicService: MusicServiceProtocol {
 
     private func fetchCurrentTrack() {
         guard spotifyIsRunning else {
-            lastTrackID = ""
-            lastFullTrack = nil
-            onPlaybackStateChanged?(false)
-            onTrackChanged?(nil)
-            stopPollTimer()
+            clearStoppedTrack()
             return
         }
 
@@ -120,9 +112,14 @@ final class SpotifyMusicService: MusicServiceProtocol {
         end tell
         """
 
-        guard let descriptor = runAppleScriptDescriptor(src), descriptor.numberOfItems >= 7 else {
+        guard let descriptor = runAppleScriptDescriptor(src) else {
             onPlaybackStateChanged?(false)
             stopPollTimer()
+            return
+        }
+
+        guard descriptor.numberOfItems >= 7 else {
+            clearStoppedTrack()
             return
         }
 
@@ -136,7 +133,7 @@ final class SpotifyMusicService: MusicServiceProtocol {
         let trackID = "\(title)-\(artist)-\(album)"
 
         guard !title.isEmpty || !artist.isEmpty else {
-            onPlaybackStateChanged?(false)
+            clearStoppedTrack()
             return
         }
 
@@ -183,6 +180,14 @@ final class SpotifyMusicService: MusicServiceProtocol {
         if let artworkURL {
             fetchArtwork(from: artworkURL, for: trackID)
         }
+    }
+
+    private func clearStoppedTrack() {
+        lastTrackID = ""
+        lastFullTrack = nil
+        onPlaybackStateChanged?(false)
+        onTrackChanged?(nil)
+        stopPollTimer()
     }
 
     private func fetchArtwork(from artworkURL: String, for trackID: String) {

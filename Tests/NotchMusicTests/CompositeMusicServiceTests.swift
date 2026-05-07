@@ -1,20 +1,121 @@
 @testable import NotchMusic
 import XCTest
 
-@MainActor
 final class CompositeMusicServiceTests: XCTestCase {
-    private var appleMusic: MockMusicService!
-    private var spotify: MockMusicService!
-    private var sut: CompositeMusicService!
+    @MainActor
+    func test_startObserving_startsBothServices() {
+        let harness = makeHarness()
 
-    private var receivedTrack: Track?
-    private var receivedPlaying: Bool?
-    private var receivedElapsed: TimeInterval?
+        harness.sut.startObserving()
 
-    override func setUp() {
-        super.setUp()
-        appleMusic = MockMusicService()
-        spotify = MockMusicService()
+        XCTAssertTrue(harness.appleMusic.didStartObserving)
+        XCTAssertTrue(harness.spotify.didStartObserving)
+    }
+
+    @MainActor
+    func test_spotifyTrackBecomesActive() {
+        let harness = makeHarness()
+        let track = Track(title: "Harder Better Faster Stronger", artist: "Daft Punk", album: "Discovery", duration: 224)
+
+        harness.spotify.simulateTrack(track)
+        harness.spotify.simulatePlaying(true)
+
+        XCTAssertEqual(harness.receivedTrack, track)
+        XCTAssertEqual(harness.receivedPlaying, true)
+    }
+
+    @MainActor
+    func test_trackChangeDoesNotEmitStalePausedState() {
+        let harness = makeHarness()
+        let track = Track(title: "Harder Better Faster Stronger", artist: "Daft Punk", album: "Discovery", duration: 224)
+
+        harness.spotify.simulateTrack(track)
+
+        XCTAssertEqual(harness.receivedTrack, track)
+        XCTAssertNil(harness.receivedPlaying)
+    }
+
+    @MainActor
+    func test_commandsRouteToActiveSource() {
+        let harness = makeHarness()
+        let track = Track(title: "Nikes", artist: "Frank Ocean", album: "Blonde", duration: 314)
+        harness.spotify.simulateTrack(track)
+
+        harness.sut.togglePlayPause()
+        harness.sut.nextTrack()
+        harness.sut.previousTrack()
+
+        XCTAssertEqual(harness.spotify.togglePlayPauseCount, 1)
+        XCTAssertEqual(harness.spotify.nextTrackCount, 1)
+        XCTAssertEqual(harness.spotify.previousTrackCount, 1)
+        XCTAssertEqual(harness.appleMusic.togglePlayPauseCount, 0)
+        XCTAssertEqual(harness.appleMusic.nextTrackCount, 0)
+        XCTAssertEqual(harness.appleMusic.previousTrackCount, 0)
+    }
+
+    @MainActor
+    func test_inactiveNilTrackDoesNotClearActiveSource() {
+        let harness = makeHarness()
+        let track = Track(title: "A-Punk", artist: "Vampire Weekend", album: "Vampire Weekend", duration: 137)
+        harness.spotify.simulateTrack(track)
+
+        harness.appleMusic.simulateTrack(nil)
+
+        XCTAssertEqual(harness.receivedTrack, track)
+    }
+
+    @MainActor
+    func test_activeNilTrackFallsBackToPlayingSource() {
+        let harness = makeHarness()
+        let appleTrack = Track(title: "Time", artist: "Pink Floyd", album: "The Dark Side of the Moon", duration: 413)
+        let spotifyTrack = Track(title: "Digital Love", artist: "Daft Punk", album: "Discovery", duration: 301)
+        harness.appleMusic.simulateTrack(appleTrack)
+        harness.appleMusic.simulatePlaying(true)
+        harness.spotify.simulateTrack(spotifyTrack)
+        harness.spotify.simulatePlaying(true)
+
+        harness.spotify.simulateTrack(nil)
+
+        XCTAssertEqual(harness.receivedTrack, appleTrack)
+        XCTAssertEqual(harness.receivedPlaying, true)
+    }
+
+    @MainActor
+    func test_activePausedTrackFallsBackToPlayingSourceAndRoutesCommands() {
+        let harness = makeHarness()
+        let appleTrack = Track(title: "Time", artist: "Pink Floyd", album: "The Dark Side of the Moon", duration: 413)
+        let spotifyTrack = Track(title: "Digital Love", artist: "Daft Punk", album: "Discovery", duration: 301)
+        harness.appleMusic.simulateTrack(appleTrack)
+        harness.appleMusic.simulatePlaying(true)
+        harness.spotify.simulateTrack(spotifyTrack)
+        harness.spotify.simulatePlaying(true)
+
+        harness.spotify.simulatePlaying(false)
+        harness.sut.togglePlayPause()
+
+        XCTAssertEqual(harness.receivedTrack, appleTrack)
+        XCTAssertEqual(harness.receivedPlaying, true)
+        XCTAssertEqual(harness.appleMusic.togglePlayPauseCount, 1)
+        XCTAssertEqual(harness.spotify.togglePlayPauseCount, 0)
+    }
+
+    @MainActor
+    private func makeHarness() -> CompositeMusicServiceHarness {
+        CompositeMusicServiceHarness()
+    }
+}
+
+@MainActor
+private final class CompositeMusicServiceHarness {
+    let appleMusic = MockMusicService()
+    let spotify = MockMusicService()
+    let sut: CompositeMusicService
+
+    var receivedTrack: Track?
+    var receivedPlaying: Bool?
+    var receivedElapsed: TimeInterval?
+
+    init() {
         sut = CompositeMusicService(services: [
             (.appleMusic, appleMusic),
             (.spotify, spotify)
@@ -22,80 +123,5 @@ final class CompositeMusicServiceTests: XCTestCase {
         sut.onTrackChanged = { [weak self] track in self?.receivedTrack = track }
         sut.onPlaybackStateChanged = { [weak self] playing in self?.receivedPlaying = playing }
         sut.onProgressChanged = { [weak self] elapsed in self?.receivedElapsed = elapsed }
-    }
-
-    override func tearDown() {
-        receivedTrack = nil
-        receivedPlaying = nil
-        receivedElapsed = nil
-        sut = nil
-        spotify = nil
-        appleMusic = nil
-        super.tearDown()
-    }
-
-    func test_startObserving_startsBothServices() {
-        sut.startObserving()
-
-        XCTAssertTrue(appleMusic.didStartObserving)
-        XCTAssertTrue(spotify.didStartObserving)
-    }
-
-    func test_spotifyTrackBecomesActive() {
-        let track = Track(title: "Harder Better Faster Stronger", artist: "Daft Punk", album: "Discovery", duration: 224)
-
-        spotify.simulateTrack(track)
-        spotify.simulatePlaying(true)
-
-        XCTAssertEqual(receivedTrack, track)
-        XCTAssertEqual(receivedPlaying, true)
-    }
-
-    func test_trackChangeDoesNotEmitStalePausedState() {
-        let track = Track(title: "Harder Better Faster Stronger", artist: "Daft Punk", album: "Discovery", duration: 224)
-
-        spotify.simulateTrack(track)
-
-        XCTAssertEqual(receivedTrack, track)
-        XCTAssertNil(receivedPlaying)
-    }
-
-    func test_commandsRouteToActiveSource() {
-        let track = Track(title: "Nikes", artist: "Frank Ocean", album: "Blonde", duration: 314)
-        spotify.simulateTrack(track)
-
-        sut.togglePlayPause()
-        sut.nextTrack()
-        sut.previousTrack()
-
-        XCTAssertEqual(spotify.togglePlayPauseCount, 1)
-        XCTAssertEqual(spotify.nextTrackCount, 1)
-        XCTAssertEqual(spotify.previousTrackCount, 1)
-        XCTAssertEqual(appleMusic.togglePlayPauseCount, 0)
-        XCTAssertEqual(appleMusic.nextTrackCount, 0)
-        XCTAssertEqual(appleMusic.previousTrackCount, 0)
-    }
-
-    func test_inactiveNilTrackDoesNotClearActiveSource() {
-        let track = Track(title: "A-Punk", artist: "Vampire Weekend", album: "Vampire Weekend", duration: 137)
-        spotify.simulateTrack(track)
-
-        appleMusic.simulateTrack(nil)
-
-        XCTAssertEqual(receivedTrack, track)
-    }
-
-    func test_activeNilTrackFallsBackToPlayingSource() {
-        let appleTrack = Track(title: "Time", artist: "Pink Floyd", album: "The Dark Side of the Moon", duration: 413)
-        let spotifyTrack = Track(title: "Digital Love", artist: "Daft Punk", album: "Discovery", duration: 301)
-        appleMusic.simulateTrack(appleTrack)
-        appleMusic.simulatePlaying(true)
-        spotify.simulateTrack(spotifyTrack)
-        spotify.simulatePlaying(true)
-
-        spotify.simulateTrack(nil)
-
-        XCTAssertEqual(receivedTrack, appleTrack)
-        XCTAssertEqual(receivedPlaying, true)
     }
 }
