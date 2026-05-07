@@ -40,15 +40,21 @@ struct CardView: View {
     }
 
     var body: some View {
-        ExpandedView(viewModel: viewModel)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(cardShape.fill(Color.black))
-            .clipShape(cardShape)
-            .overlay(cardShape.strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5))
-            .contentShape(Rectangle())
-            .allowsHitTesting(viewModel.isExpanded)
-            .onHover { hovering in
-                if hovering { viewModel.onCardHoverEntered() } else { viewModel.onHoverLeft() }
-            }
+        ZStack(alignment: .top) {
+            ExpandedView(viewModel: viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(cardShape.fill(Color.black))
+                .clipShape(cardShape)
+                .overlay(cardShape.strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5))
+                .offset(y: viewModel.isExpanded ? 0 : -NotchGeometry.expandedHeight)
+                .opacity(viewModel.isExpanded ? 1 : 0)
+        }
+        .clipped()
+        .contentShape(Rectangle())
+        .allowsHitTesting(viewModel.isExpanded)
+        .animation(.smooth(duration: 0.22), value: viewModel.isExpanded)
+        .onHover { hovering in
+            if hovering { viewModel.onCardHoverEntered() } else { viewModel.onHoverLeft() }
+        }
     }
 }

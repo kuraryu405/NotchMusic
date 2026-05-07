@@ -5,7 +5,7 @@ import SwiftUI
 /// Manages two overlay windows:
 ///
 ///   pillWindow  — permanent, never moves, covers the notch strip (pills)
-///   cardWindow  — appears below when expanded, animates height only
+///   cardWindow  — appears below when expanded; content animates inside a fixed window
 @MainActor
 final class NotchWindowManager {
     private var pillWindow: NSWindow?
@@ -47,13 +47,6 @@ final class NotchWindowManager {
                height: NotchGeometry.expandedHeight)
     }
 
-    private func cardCollapsedFrame(for geo: NotchGeometry) -> NSRect {
-        NSRect(x: x(for: geo),
-               y: geo.notchFrame.minY - 1,
-               width: NotchGeometry.expandedWidth,
-               height: 1)
-    }
-
     // MARK: - Window builders
 
     private func makeWindow(frame: NSRect) -> NSWindow {
@@ -78,7 +71,7 @@ final class NotchWindowManager {
     }
 
     private func makeCardWindow() -> NSWindow {
-        let win = makeWindow(frame: cardCollapsedFrame(for: geometry))
+        let win = makeWindow(frame: cardExpandedFrame(for: geometry))
         win.alphaValue = 0
         win.ignoresMouseEvents = true
         win.orderOut(nil)
@@ -119,7 +112,7 @@ final class NotchWindowManager {
             .receive(on: RunLoop.main)
             .sink { [weak self, weak win] _ in
                 guard let self, let win else { return }
-                win.setFrame(self.cardCollapsedFrame(for: self.geometry), display: false, animate: false)
+                win.setFrame(self.cardExpandedFrame(for: self.geometry), display: false, animate: false)
                 win.alphaValue = 0
                 win.ignoresMouseEvents = true
                 win.orderOut(nil)
@@ -173,10 +166,7 @@ final class NotchWindowManager {
         }
 
         guard let cardWindow else { return }
-        let frame = viewModel.isExpanded
-            ? cardExpandedFrame(for: geometry)
-            : cardCollapsedFrame(for: geometry)
-        cardWindow.setFrame(frame, display: viewModel.isExpanded, animate: false)
+        cardWindow.setFrame(cardExpandedFrame(for: geometry), display: viewModel.isExpanded, animate: false)
         if viewModel.isExpanded {
             cardWindow.ignoresMouseEvents = false
             cardWindow.alphaValue = 1
@@ -192,21 +182,16 @@ final class NotchWindowManager {
         let geo = geometry
 
         if expanded {
+            win.setFrame(cardExpandedFrame(for: geo), display: false, animate: false)
             win.orderFrontRegardless()
-            win.setFrame(cardCollapsedFrame(for: geo), display: false, animate: false)
-            win.alphaValue = 0
             win.ignoresMouseEvents = false
             viewModel.pillCornersFlat = true
-            animateCardWindow(win, targetFrame: cardExpandedFrame(for: geo), alpha: 1)
+            animateCardWindow(win, alpha: 1)
             return
         }
 
         win.ignoresMouseEvents = true
-        animateCardWindow(
-            win,
-            targetFrame: cardCollapsedFrame(for: geo),
-            alpha: 0
-        ) { [weak self, weak win] in
+        animateCardWindow(win, alpha: 0) { [weak self, weak win] in
             Task { @MainActor [weak self, weak win] in
                 self?.viewModel.pillCornersFlat = false
                 win?.ignoresMouseEvents = true
@@ -217,14 +202,12 @@ final class NotchWindowManager {
 
     private func animateCardWindow(
         _ win: NSWindow,
-        targetFrame: NSRect,
         alpha: CGFloat,
         completion: (@Sendable () -> Void)? = nil
     ) {
         NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration       = 0.4
+            ctx.duration       = 0.22
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
-            win.animator().setFrame(targetFrame, display: true)
             win.animator().alphaValue = alpha
         }, completionHandler: completion)
     }
