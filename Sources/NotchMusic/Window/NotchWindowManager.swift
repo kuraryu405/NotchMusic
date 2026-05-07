@@ -18,17 +18,13 @@ final class NotchWindowManager {
         self.viewModel = viewModel
         self.geometry  = NotchGeometry()
         debugLog("[NotchWindow] notchFrame: \(geometry.notchFrame)")
+        observeWindowRecoveryEvents()
     }
 
     func show() {
         if pillWindow == nil { pillWindow = makePillWindow() }
         if cardWindow == nil { cardWindow = makeCardWindow() }
-        pillWindow?.orderFrontRegardless()
-        if viewModel.isExpanded {
-            cardWindow?.orderFrontRegardless()
-        } else {
-            cardWindow?.orderOut(nil)
-        }
+        refreshWindowVisibility(reason: "show")
     }
 
     // MARK: - Frame helpers
@@ -66,7 +62,7 @@ final class NotchWindowManager {
         win.backgroundColor      = .clear
         win.hasShadow            = false
         win.level                = .screenSaver
-        win.collectionBehavior   = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        win.collectionBehavior   = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         win.isMovable            = false
         win.isReleasedWhenClosed = false
         win.ignoresMouseEvents   = false
@@ -78,17 +74,6 @@ final class NotchWindowManager {
         win.contentView = NSHostingView(rootView:
             PillView(viewModel: viewModel, geometry: geometry)
         )
-
-        NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil, queue: .main
-        ) { [weak self, weak win] _ in
-            Task { @MainActor [weak self, weak win] in
-                guard let self, let win else { return }
-                self.geometry = NotchGeometry()
-                win.setFrame(self.pillFrame(for: self.geometry), display: true, animate: false)
-            }
-        }
         return win
     }
 
@@ -103,7 +88,6 @@ final class NotchWindowManager {
         configureCardHostView(hostView)
         bindCardExpansion(for: win)
         bindCardTrackCollapse(for: win)
-        observeCardScreenChanges(for: win)
         return win
     }
 
@@ -144,28 +128,63 @@ final class NotchWindowManager {
             .store(in: &cancellables)
     }
 
-    private func observeCardScreenChanges(for win: NSWindow) {
+    private func observeWindowRecoveryEvents() {
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
-        ) { [weak self, weak win] _ in
-            Task { @MainActor [weak self, weak win] in
-                guard let self, let win else { return }
-                self.geometry = NotchGeometry()
-                let f = self.viewModel.isExpanded
-                    ? self.cardExpandedFrame(for: self.geometry)
-                    : self.cardCollapsedFrame(for: self.geometry)
-                win.setFrame(f, display: true, animate: false)
-                if self.viewModel.isExpanded {
-                    win.ignoresMouseEvents = false
-                    win.alphaValue = 1
-                    win.orderFrontRegardless()
-                } else {
-                    win.ignoresMouseEvents = true
-                    win.alphaValue = 0
-                    win.orderOut(nil)
-                }
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshWindowVisibility(reason: "screenParametersChanged")
             }
+        }
+
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        workspaceCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshWindowVisibility(reason: "activeSpaceDidChange")
+            }
+        }
+        workspaceCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshWindowVisibility(reason: "didWake")
+            }
+        }
+    }
+
+    private func refreshWindowVisibility(reason: String) {
+        geometry = NotchGeometry()
+        debugLog(
+            "[NotchWindow] refresh: \(reason), frame: \(geometry.notchFrame), "
+                + "expanded: \(viewModel.isExpanded), hasTrack: \(viewModel.currentTrack != nil)"
+        )
+
+        if let pillWindow {
+            pillWindow.setFrame(pillFrame(for: geometry), display: true, animate: false)
+            pillWindow.contentView = NSHostingView(rootView:
+                PillView(viewModel: viewModel, geometry: geometry)
+            )
+            pillWindow.orderFrontRegardless()
+        }
+
+        guard let cardWindow else { return }
+        let frame = viewModel.isExpanded
+            ? cardExpandedFrame(for: geometry)
+            : cardCollapsedFrame(for: geometry)
+        cardWindow.setFrame(frame, display: viewModel.isExpanded, animate: false)
+        if viewModel.isExpanded {
+            cardWindow.ignoresMouseEvents = false
+            cardWindow.alphaValue = 1
+            cardWindow.orderFrontRegardless()
+        } else {
+            cardWindow.ignoresMouseEvents = true
+            cardWindow.alphaValue = 0
+            cardWindow.orderOut(nil)
         }
     }
 

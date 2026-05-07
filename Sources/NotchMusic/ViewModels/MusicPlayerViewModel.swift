@@ -23,9 +23,11 @@ final class MusicPlayerViewModel: ObservableObject {
     }
 
     private let service: any MusicServiceProtocol
+    private let missingTrackGracePeriod: Duration
 
-    init(service: any MusicServiceProtocol) {
+    init(service: any MusicServiceProtocol, missingTrackGracePeriod: Duration = .seconds(6)) {
         self.service = service
+        self.missingTrackGracePeriod = missingTrackGracePeriod
         bindService()
     }
 
@@ -58,6 +60,7 @@ final class MusicPlayerViewModel: ObservableObject {
 
     private var pendingAutoExpand = false
     private var autoCollapseTask: Task<Void, Never>?
+    private var clearTrackTask: Task<Void, Never>?
     private var isHovering = false
 
     private func bindService() {
@@ -66,14 +69,17 @@ final class MusicPlayerViewModel: ObservableObject {
         service.onTrackChanged = { [weak self] track in
             guard let self else { return }
             debugLog("[ViewModel] onTrackChanged: \(track?.title ?? "nil")")
+
+            guard let track else {
+                scheduleMissingTrackClear()
+                return
+            }
+
+            clearTrackTask?.cancel()
+            clearTrackTask = nil
             let previous = currentTrack
             let songChanged = !representsSameSong(track, previous)
             currentTrack = track
-
-            guard track != nil else {
-                collapseImmediately()
-                return
-            }
 
             guard songChanged else { return }
 
@@ -155,6 +161,39 @@ final class MusicPlayerViewModel: ObservableObject {
         pendingAutoExpand = false
         cancelAutoCollapse()
         isExpanded = false
+    }
+
+    private func scheduleMissingTrackClear() {
+        pendingAutoExpand = false
+        cancelAutoCollapse()
+        clearTrackTask?.cancel()
+
+        guard currentTrack != nil else {
+            collapseImmediately()
+            return
+        }
+
+        guard missingTrackGracePeriod > .zero else {
+            clearMissingTrack()
+            return
+        }
+
+        debugLog("[ViewModel] missing track, waiting before clearing UI")
+        let gracePeriod = missingTrackGracePeriod
+        clearTrackTask = Task { [weak self] in
+            try? await Task.sleep(for: gracePeriod)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.clearMissingTrack()
+            }
+        }
+    }
+
+    private func clearMissingTrack() {
+        currentTrack = nil
+        elapsed = 0
+        collapseImmediately()
+        clearTrackTask = nil
     }
 
     private func collapseForPlaybackPause() {

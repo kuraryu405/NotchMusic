@@ -12,7 +12,7 @@ final class MusicPlayerViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         service = MockMusicService()
-        sut     = MusicPlayerViewModel(service: service)
+        sut     = MusicPlayerViewModel(service: service, missingTrackGracePeriod: .zero)
     }
 
     override func tearDown() {
@@ -45,6 +45,16 @@ final class MusicPlayerViewModelTests: XCTestCase {
         sut.isExpanded = true
         service.simulateTrack(nil)
         XCTAssertFalse(sut.isExpanded)
+    }
+
+    func test_transientNilTrackKeepsLastTrackDuringGracePeriod() {
+        let track = Track(title: "Test", artist: "Artist", album: "Album", duration: 200)
+        sut = MusicPlayerViewModel(service: service, missingTrackGracePeriod: .seconds(1))
+
+        service.simulateTrack(track)
+        service.simulateTrack(nil)
+
+        XCTAssertEqual(sut.currentTrack, track)
     }
 
     func test_whenTrackChangesBeforePlaybackStarts_expandsAfterPlayingEvent() {
