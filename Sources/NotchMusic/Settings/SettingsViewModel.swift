@@ -34,16 +34,16 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func refreshPermissionStatus() {
-        appleMusicPermissionStatus = permissionChecker.checkStatus(for: .appleMusic, launchIfNeeded: false)
-        spotifyPermissionStatus = permissionChecker.checkStatus(for: .spotify, launchIfNeeded: false)
+        appleMusicPermissionStatus = permissionChecker.refreshStatus(for: .appleMusic)
+        spotifyPermissionStatus = permissionChecker.refreshStatus(for: .spotify)
     }
 
     func requestAppleMusicAccess() {
-        appleMusicPermissionStatus = permissionChecker.checkStatus(for: .appleMusic, launchIfNeeded: true)
+        appleMusicPermissionStatus = permissionChecker.requestAccess(for: .appleMusic)
     }
 
     func requestSpotifyAccess() {
-        spotifyPermissionStatus = permissionChecker.checkStatus(for: .spotify, launchIfNeeded: true)
+        spotifyPermissionStatus = permissionChecker.requestAccess(for: .spotify)
     }
 
     func setLaunchAtLoginEnabled(_ enabled: Bool) {
@@ -264,7 +264,8 @@ enum ScriptableMusicApp {
 }
 
 protocol MusicAppPermissionChecking {
-    func checkStatus(for app: ScriptableMusicApp, launchIfNeeded: Bool) -> MusicAppPermissionStatus
+    func refreshStatus(for app: ScriptableMusicApp) -> MusicAppPermissionStatus
+    func requestAccess(for app: ScriptableMusicApp) -> MusicAppPermissionStatus
 }
 
 struct MusicAppPermissionChecker: MusicAppPermissionChecking {
@@ -274,7 +275,20 @@ struct MusicAppPermissionChecker: MusicAppPermissionChecking {
         self.workspace = workspace
     }
 
-    func checkStatus(for app: ScriptableMusicApp, launchIfNeeded: Bool) -> MusicAppPermissionStatus {
+    func refreshStatus(for app: ScriptableMusicApp) -> MusicAppPermissionStatus {
+        guard workspace.urlForApplication(withBundleIdentifier: app.bundleIdentifier) != nil else {
+            return .notInstalled
+        }
+
+        let appIsRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleIdentifier).isEmpty
+        return appIsRunning ? .unknown : .appClosed
+    }
+
+    func requestAccess(for app: ScriptableMusicApp) -> MusicAppPermissionStatus {
+        checkAutomationStatus(for: app, launchIfNeeded: true)
+    }
+
+    private func checkAutomationStatus(for app: ScriptableMusicApp, launchIfNeeded: Bool) -> MusicAppPermissionStatus {
         guard let url = workspace.urlForApplication(withBundleIdentifier: app.bundleIdentifier) else {
             return .notInstalled
         }
