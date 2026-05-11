@@ -8,6 +8,10 @@ import SwiftUI
 ///   cardWindow  — appears below when expanded; content animates inside a fixed window
 @MainActor
 final class NotchWindowManager {
+    private static let overlayCollectionBehavior: NSWindow.CollectionBehavior = [
+        .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .transient, .ignoresCycle
+    ]
+
     private var pillWindow: NSWindow?
     private var cardWindow: NSWindow?
     private var geometry: NotchGeometry
@@ -50,15 +54,18 @@ final class NotchWindowManager {
     // MARK: - Window builders
 
     private func makeWindow(frame: NSRect) -> NSWindow {
-        let win = NSWindow(contentRect: frame, styleMask: [], backing: .buffered, defer: false)
+        let win = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         win.isOpaque             = false
         win.backgroundColor      = .clear
         win.hasShadow            = false
         win.level                = .screenSaver
-        win.collectionBehavior   = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        win.collectionBehavior   = Self.overlayCollectionBehavior
+        win.canHide              = false
         win.isMovable            = false
         win.isReleasedWhenClosed = false
         win.ignoresMouseEvents   = false
+        win.isFloatingPanel      = true
+        win.hidesOnDeactivate    = false
         return win
     }
 
@@ -138,6 +145,7 @@ final class NotchWindowManager {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refreshWindowVisibility(reason: "activeSpaceDidChange")
+                self?.retryRefreshAfterSpaceTransition()
             }
         }
         workspaceCenter.addObserver(
@@ -148,6 +156,12 @@ final class NotchWindowManager {
                 self?.refreshWindowVisibility(reason: "didWake")
             }
         }
+    }
+
+    private func bringOverlayWindowToFront(_ win: NSWindow) {
+        win.collectionBehavior = Self.overlayCollectionBehavior
+        win.canHide = false
+        win.orderFrontRegardless()
     }
 
     private func refreshWindowVisibility(reason: String) {
@@ -162,7 +176,7 @@ final class NotchWindowManager {
             pillWindow.contentView = NSHostingView(rootView:
                 PillView(viewModel: viewModel, geometry: geometry)
             )
-            pillWindow.orderFrontRegardless()
+            bringOverlayWindowToFront(pillWindow)
         }
 
         guard let cardWindow else { return }
@@ -170,7 +184,7 @@ final class NotchWindowManager {
         if viewModel.isExpanded {
             cardWindow.ignoresMouseEvents = false
             cardWindow.alphaValue = 1
-            cardWindow.orderFrontRegardless()
+            bringOverlayWindowToFront(cardWindow)
         } else {
             cardWindow.ignoresMouseEvents = true
             cardWindow.alphaValue = 0
@@ -183,7 +197,7 @@ final class NotchWindowManager {
 
         if expanded {
             win.setFrame(cardExpandedFrame(for: geo), display: false, animate: false)
-            win.orderFrontRegardless()
+            bringOverlayWindowToFront(win)
             win.ignoresMouseEvents = false
             viewModel.pillCornersFlat = true
             animateCardWindow(win, alpha: 1)
@@ -210,5 +224,27 @@ final class NotchWindowManager {
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
             win.animator().alphaValue = alpha
         }, completionHandler: completion)
+    }
+}
+
+private extension NotchWindowManager {
+    static var spaceRetryDelay: UInt64 { 120_000_000 }
+    static var spaceRetryCount: Int { 4 }
+
+    var visibleOverlayWindowsAreOnActiveSpace: Bool {
+        guard let pillWindow, pillWindow.isOnActiveSpace else { return false }
+        guard viewModel.isExpanded else { return true }
+        return cardWindow?.isOnActiveSpace == true
+    }
+
+    func retryRefreshAfterSpaceTransition() {
+        Task { @MainActor [weak self] in
+            for attempt in 1...Self.spaceRetryCount {
+                try? await Task.sleep(nanoseconds: Self.spaceRetryDelay)
+                guard let self else { return }
+                self.refreshWindowVisibility(reason: "activeSpaceDidChangeRetry\(attempt)")
+                if self.visibleOverlayWindowsAreOnActiveSpace { return }
+            }
+        }
     }
 }

@@ -1,5 +1,5 @@
-@testable import NotchMusic
 import AppKit
+@testable import NotchMusic
 import XCTest
 
 final class MusicPlayerViewModelTests: XCTestCase {
