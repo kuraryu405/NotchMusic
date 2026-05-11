@@ -1,6 +1,15 @@
 import AppKit
 import Foundation
 
+private struct SpotifyTrackPayload {
+    let title: String
+    let artist: String
+    let album: String
+    let duration: TimeInterval
+    let trackID: String
+    let artworkURL: String?
+}
+
 /// Reads now-playing state from Spotify via AppleScript and distributed
 /// notifications.
 @MainActor
@@ -72,14 +81,14 @@ final class SpotifyMusicService: MusicServiceProtocol {
             return
         }
 
-        updateTrackIfNeeded(
+        updateTrackIfNeeded(with: SpotifyTrackPayload(
             title: title,
             artist: artist,
             album: album,
             duration: duration,
             trackID: trackID,
             artworkURL: artworkURL
-        )
+        ))
         onProgressChanged?(elapsed)
 
         let isPlaying = state == "playing"
@@ -138,14 +147,14 @@ final class SpotifyMusicService: MusicServiceProtocol {
             return
         }
 
-        updateTrackIfNeeded(
+        updateTrackIfNeeded(with: SpotifyTrackPayload(
             title: title,
             artist: artist,
             album: album,
             duration: duration,
             trackID: trackID,
             artworkURL: artworkURL.isEmpty ? nil : artworkURL
-        )
+        ))
         onProgressChanged?(elapsed)
 
         let isPlaying = state == "playing"
@@ -161,28 +170,21 @@ final class SpotifyMusicService: MusicServiceProtocol {
         !NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleIdentifier).isEmpty
     }
 
-    private func updateTrackIfNeeded(
-        title: String,
-        artist: String,
-        album: String,
-        duration: TimeInterval,
-        trackID: String,
-        artworkURL: String?
-    ) {
-        if trackID == lastTrackID {
-            if lastFullTrack?.artwork == nil, let artworkURL {
-                fetchArtworkIfNeeded(from: artworkURL, for: trackID)
+    private func updateTrackIfNeeded(with payload: SpotifyTrackPayload) {
+        if payload.trackID == lastTrackID {
+            if lastFullTrack?.artwork == nil, let artworkURL = payload.artworkURL {
+                fetchArtworkIfNeeded(from: artworkURL, for: payload.trackID)
             }
             return
         }
 
-        lastTrackID = trackID
-        let track = Track(title: title, artist: artist, album: album, duration: duration)
+        lastTrackID = payload.trackID
+        let track = Track(title: payload.title, artist: payload.artist, album: payload.album, duration: payload.duration)
         lastFullTrack = track
         onTrackChanged?(track)
 
-        if let artworkURL {
-            fetchArtworkIfNeeded(from: artworkURL, for: trackID)
+        if let artworkURL = payload.artworkURL {
+            fetchArtworkIfNeeded(from: artworkURL, for: payload.trackID)
         }
     }
 
@@ -241,12 +243,15 @@ final class SpotifyMusicService: MusicServiceProtocol {
         }
     }
 
+}
+
+private extension SpotifyMusicService {
     @discardableResult
-    private func runAppleScript(_ src: String) -> String {
+    func runAppleScript(_ src: String) -> String {
         runAppleScriptDescriptor(src)?.stringValue ?? ""
     }
 
-    private func runAppleScriptDescriptor(_ src: String) -> NSAppleEventDescriptor? {
+    func runAppleScriptDescriptor(_ src: String) -> NSAppleEventDescriptor? {
         guard let script = NSAppleScript(source: src) else { return nil }
         var err: NSDictionary?
         let result = script.executeAndReturnError(&err)
@@ -257,11 +262,11 @@ final class SpotifyMusicService: MusicServiceProtocol {
         return result
     }
 
-    private func stringValue(at index: Int, in descriptor: NSAppleEventDescriptor) -> String {
+    func stringValue(at index: Int, in descriptor: NSAppleEventDescriptor) -> String {
         descriptor.atIndex(index)?.stringValue ?? ""
     }
 
-    private func doubleValue(at index: Int, in descriptor: NSAppleEventDescriptor) -> Double {
+    func doubleValue(at index: Int, in descriptor: NSAppleEventDescriptor) -> Double {
         let item = descriptor.atIndex(index)
         if let value = item?.stringValue.flatMap(Double.init) {
             return value
@@ -269,7 +274,7 @@ final class SpotifyMusicService: MusicServiceProtocol {
         return item?.doubleValue ?? 0
     }
 
-    private func numberValue(_ raw: Any?) -> Double {
+    func numberValue(_ raw: Any?) -> Double {
         switch raw {
         case let value as Double:
             return value
@@ -286,18 +291,18 @@ final class SpotifyMusicService: MusicServiceProtocol {
         }
     }
 
-    private func normalizedDuration(from value: Double) -> TimeInterval {
+    func normalizedDuration(from value: Double) -> TimeInterval {
         value > 10_000 ? value / 1000.0 : value
     }
 
-    private func startPollTimer() {
+    func startPollTimer() {
         guard pollTimer == nil else { return }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.fetchCurrentTrack() }
         }
     }
 
-    private func stopPollTimer() {
+    func stopPollTimer() {
         pollTimer?.invalidate()
         pollTimer = nil
     }
